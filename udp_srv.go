@@ -1,5 +1,3 @@
-// +build linux
-
 package main
 
 /*
@@ -18,35 +16,6 @@ import (
 	"time"
 	"unsafe"
 )
-
-/*
-
-Steps to get transparent proxying working on Linux:
-
-1) Run these commands (as root):
-
-iptables -t mangle -N DEMUX
-iptables -t mangle -A DEMUX --jump MARK --set-mark 0x1
-iptables -t mangle -A DEMUX --jump ACCEPT
-ip rule add fwmark 0x1 lookup 100
-ip route add local 0.0.0.0/0 dev lo table 100
-
-2) Run the following commands - note that there's one for each interface/port
-that you forward to:
-
-iptables -t mangle -A OUTPUT --protocol tcp --out-interface eth0 --sport 22 --jump DEMUX
-iptables -t mangle -A OUTPUT --protocol tcp --out-interface eth0 --sport 8080 --jump DEMUX
-
-3) Finally, run demux (needs to be as root to use transparent proxying):
-
-sudo ./demux -p 5555 --transparent=true \
---http-destination=<eth0 address>:8080 \
---ssh-destination=<eth0 address>:22
-
-Note that the various destination addresses must be specified with the same
-address as the interface you gave in step 2.
-
-*/
 
 func openTransparent(sip string, listen_port int) (net.Conn, error) {
     family := syscall.AF_INET
@@ -139,44 +108,6 @@ func openTransparent2(sip string, listen_port int) (*net.UDPConn, error) {
 	return cc.(*net.UDPConn), nil
 }
 
-func sysSocket(family, sotype, proto int) (int, error) {
-    syscall.ForkLock.RLock()
-	s, err := syscall.Socket(family, sotype, proto)
-    if err != nil {
-        syscall.CloseOnExec(s)
-    }
-    syscall.ForkLock.RUnlock()
-    if err != nil {
-        return -1, err
-    }
-    if err = syscall.SetNonblock(s, true); err != nil {
-        syscall.Close(s)
-        return -1, err
-    }
-    return s, nil
-}
-
-// NOTE: Taken from the Go source: src/net/sockopt_posix.go
-// Boolean to int.
-func boolint(b bool) int {
-    if b {
-        return 1
-    }
-    return 0
-}
-
-// NOTE: Taken from the Go source: src/net/tcpsock_posix.go
-func tcpAddrFamily(a *net.TCPAddr) int {
-    if a == nil || len(a.IP) <= net.IPv4len {
-        return syscall.AF_INET
-    }
-    if a.IP.To4() != nil {
-        return syscall.AF_INET
-    }
-    return syscall.AF_INET6
-}
-
-// NOTE: Taken from the Go source: src/net/ipsock_posix.go
 func ipToSockaddr(family int, sip string, port int) (syscall.Sockaddr, error) {
     switch family {
     case syscall.AF_INET:
